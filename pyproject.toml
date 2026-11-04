@@ -1,0 +1,24 @@
+[project]
+name = "agentic-ai-tutorials"
+version = "0.1.0"
+description = "Hands-on LangChain and LangGraph tutorials"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=1.0.0",
+    "langchain-openai>=1.0.0",
+    "langgraph>=1.0.0",
+    "python-dotenv>=1.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.uv]
+package = false
