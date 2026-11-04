@@ -15,10 +15,11 @@ step, and an output parser compose into one runnable pipeline:
 input -> PromptTemplate -> model/runnable -> StrOutputParser -> text
 ```
 
-In the offline demo, a local runnable stands in for the model. The same chain
-accepts a live ChatOpenAI model when run with `--live`. Next, inspect the graph:
-`make_plan` and `write_answer` are nodes; edges define the order; `LessonState`
-is the shared data passed between them.
+In the offline demo, a local runnable stands in for the model. With `--live`,
+the chain uses the configured OpenAI model first and retries with Groq if that
+request fails and Groq is configured. Next, inspect the graph: `make_plan` and
+`write_answer` are nodes; edges define the order; `LessonState` is the shared
+data passed between them.
 
 ```powershell
 uv run python src/agentic_ai_tutorials/lesson_01_foundations.py
@@ -103,12 +104,105 @@ only after defining tool permissions, validation, and stopping conditions.
 **Try it:** add an editor specialist and route to it only when the fact-checker
 requests a revision.
 
-## Next topics
+## How a harness sits on LangGraph
 
-After these examples, extend the same graphs with streaming, structured model
-outputs, retrieval, tracing/evaluation, and a durable store for data shared
-across threads. Live model examples prefer OpenAI and fall back to Groq when
-both providers are configured; configure `OPENAI_API_KEY` and `OPENAI_MODEL`,
-and optionally `GROQ_API_KEY` and `GROQ_MODEL`, in `.env`. Keep provider
-credentials in ignored local environment files; never paste live credentials
-into source code or tutorial fixtures.
+The [product split in the LangChain docs](https://docs.langchain.com/oss/python/concepts/products)
+separates frameworks, runtimes, and harnesses:
+
+```text
+Harness: Deep Agents
+    Framework: LangChain agents
+        Runtime: LangGraph
+            State, checkpoints, streaming, interrupts, and threads
+```
+
+LangGraph is the runtime underneath an agent. It executes graphs and provides
+primitives for state, checkpointing, streaming, pausing, and resuming. By
+itself, it does not give a model a filesystem, planner, or subagents.
+
+[Deep Agents](https://docs.langchain.com/oss/python/deepagents/overview) is a
+harness built on LangGraph. `create_deep_agent()` assembles an agent loop and
+opinionated tools and middleware, such as a virtual filesystem, context
+management, subagent task delegation, optional todo planning, and configurable
+human approval for tools. The harness uses LangGraph interrupts and
+checkpointers for pause/resume and persistence; its subagents are themselves
+graphs. You still invoke or stream the returned agent. You do not need to draw
+its internal graph for the common case.
+
+The tutorials in this repository do **not** load Deep Agents. In particular,
+Lesson 7's supervisor, researcher, writer, and fact-checker are hand-written
+LangGraph nodes, not harness-provided subagents. Choose LangGraph when you need
+to design and own the workflow graph; choose a harness when you want an
+opinionated agent with common tools and middleware already wired up.
+
+## LangGraph coverage and next topics
+
+The following checklist distinguishes implemented examples from topics still
+to explore. The source of truth for current coverage is the linked lesson;
+unchecked items are learning gaps, not claims that this project implements
+them.
+
+### LangGraph overview topics
+
+- [x] State, nodes, edges, compile, and invoke: [Lesson 1](../src/agentic_ai_tutorials/lesson_01_foundations.py).
+- [x] Conditional branches: [Lesson 3](../src/agentic_ai_tutorials/lesson_03_routing.py).
+- [x] A bounded loop and recursion-limit guard: [Lesson 4](../src/agentic_ai_tutorials/lesson_04_bounded_loop.py).
+- [x] Checkpointed thread state: [Lesson 5](../src/agentic_ai_tutorials/lesson_05_checkpointing.py).
+- [x] Human pause and resume with `interrupt()` and `Command(resume=...)`: [Lesson 6](../src/agentic_ai_tutorials/lesson_06_human_approval.py).
+- [x] A hand-built supervisor workflow and an append reducer: [Lesson 7](../src/agentic_ai_tutorials/lesson_07_supervisor.py).
+- [ ] Stream model tokens and graph state updates with `stream` and
+  `stream_events`; current lessons use `invoke`.
+- [ ] Contrast thread-scoped short-term state with long-term memory in a
+  store shared across different `thread_id`s.
+- [ ] Combine deterministic and real model-backed graph nodes. The current
+  graph nodes are deterministic; `--live` currently demonstrates a LangChain
+  chain or agent.
+- [ ] Call a chat model and execute its tool from inside an explicit
+  `StateGraph` node.
+- [ ] Enable LangSmith tracing with `LANGSMITH_TRACING` and a user-provided
+  key, then inspect an actual trace.
+- [ ] Explain deployment options such as LangSmith Studio and Agent Server.
+  Link to current official guidance rather than simulating a deployment.
+- [x] Compare LangGraph to LangChain `create_agent` and Deep Agents: see
+  [Lesson 2](../src/agentic_ai_tutorials/lesson_02_tools_agent.py) and
+  [How a harness sits on LangGraph](#how-a-harness-sits-on-langgraph).
+
+### Further LangGraph guides
+
+- [ ] Build a hello-world graph with `MessagesState`.
+- [ ] Explore message reducers such as `add_messages`; Lesson 7 only uses
+  `operator.add` for an append-only notes list.
+- [x] See a model select and call a tool, then use its result: the prebuilt
+  agent in [Lesson 2](../src/agentic_ai_tutorials/lesson_02_tools_agent.py).
+- [ ] Compare that prebuilt agent with a hand-built `StateGraph` tool-calling
+  loop.
+- [ ] Explore checkpoint time travel, replay, and forking beyond the
+  save-and-resume example in Lesson 5.
+- [ ] Demonstrate durable execution by failing and retrying a node with a
+  persistent checkpointer.
+- [ ] Run the Postgres checkpointer against a real `POSTGRES_URI`; the current
+  checkpoint example is in-memory only.
+- [ ] Build and invoke a subgraph.
+- [ ] Run parallel branches with `Send` and combine their results using a
+  map-reduce pattern.
+- [ ] Demonstrate the Functional API with `@entrypoint` and `@task`.
+- [ ] Show the recursion-limit exception for a graph whose loop has no stop,
+  and contrast it with Lesson 4's explicit stop condition.
+- [x] Demonstrate an interrupt with a checkpointer and resume: [Lesson 6](../src/agentic_ai_tutorials/lesson_06_human_approval.py).
+- [ ] Expand interrupt coverage: keep interrupt calls in a stable order, avoid
+  catching the interrupt exception broadly, and put non-idempotent side
+  effects after the resume point.
+- [ ] Show a larger application layout with separate state, node, and graph
+  builder modules.
+
+For official, version-current explanations, begin with the
+[LangGraph overview](https://docs.langchain.com/oss/python/langgraph/overview)
+and the linked guides there.
+
+## Provider configuration
+
+Live model examples prefer OpenAI and fall back to Groq when both providers
+are configured. Set `OPENAI_API_KEY` and `OPENAI_MODEL`, and optionally
+`GROQ_API_KEY` and `GROQ_MODEL`, in `.env`. Keep provider credentials in
+ignored local environment files; never paste live credentials into source code
+or tutorial fixtures.

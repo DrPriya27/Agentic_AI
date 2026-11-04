@@ -1,6 +1,5 @@
 # Agentic AI: LangChain and LangGraph tutorials
 
-A practical, incremental tutorial series based on the topics in `resume.pdf`.
 The examples emphasize explicit state, inspectable workflows, and bounded
 execution. Lesson 1 and the graph lessons run locally without an API key.
 
