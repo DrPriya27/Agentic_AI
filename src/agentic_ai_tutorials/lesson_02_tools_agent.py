@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import os
+import sys
+from pathlib import Path
 
-from dotenv import load_dotenv
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from langchain.agents.middleware import wrap_model_call
 from langchain.tools import tool
+
+from agentic_ai_tutorials.models import load_chat_models, run_with_fallback
 
 
 @tool
@@ -20,23 +26,27 @@ def lookup_product_price(product: str) -> str:
 
 
 def build_agent():
-    """Create a model-backed agent; this requires configured provider credentials."""
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    model_name = os.getenv("OPENAI_MODEL")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not model_name:
-        raise RuntimeError(
-            "Live mode needs OPENAI_API_KEY and OPENAI_MODEL in the environment or .env."
-        )
+    """Create an agent that prefers OpenAI and falls back to Groq when configured."""
+    models = load_chat_models()
 
     from langchain.agents import create_agent
-    from langchain_openai import ChatOpenAI
 
-    options: dict[str, str] = {"model": model_name, "api_key": api_key}
-    if base_url:
-        options["base_url"] = base_url
-    return create_agent(ChatOpenAI(**options), tools=[lookup_product_price])
+    middleware = []
+    if models.fallback is not None:
+        fallback_model = models.fallback
+
+        @wrap_model_call
+        def fallback_on_provider_error(request, handler):
+            return run_with_fallback(
+                lambda: handler(request),
+                lambda: handler(request.override(model=fallback_model)),
+                models.primary_name,
+                models.fallback_name,
+            )
+
+        middleware.append(fallback_on_provider_error)
+
+    return create_agent(models.primary, tools=[lookup_product_price], middleware=middleware)
 
 
 def main() -> None:

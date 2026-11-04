@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 import argparse
-import os
+import sys
+from pathlib import Path
 from typing import TypedDict
 
-from dotenv import load_dotenv
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.graph import END, START, StateGraph
+
+from agentic_ai_tutorials.models import build_fallback_runnable, load_chat_models
 
 
 class LessonState(TypedDict):
@@ -52,21 +57,7 @@ def build_graph() -> Runnable:
 
 
 def _live_model() -> Runnable:
-    load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    model_name = os.getenv("OPENAI_MODEL")
-    base_url = os.getenv("OPENAI_BASE_URL")
-    if not api_key or not model_name:
-        raise RuntimeError(
-            "Live mode needs OPENAI_API_KEY and OPENAI_MODEL in the environment or .env."
-        )
-
-    from langchain_openai import ChatOpenAI
-
-    options: dict[str, str] = {"model": model_name, "api_key": api_key}
-    if base_url:
-        options["base_url"] = base_url
-    return ChatOpenAI(**options)
+    return build_fallback_runnable(load_chat_models())
 
 
 def main() -> None:

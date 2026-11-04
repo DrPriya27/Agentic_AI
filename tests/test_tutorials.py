@@ -1,5 +1,11 @@
+import pytest
+from langchain_core.exceptions import ModelRateLimitError
+from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
+
 from agentic_ai_tutorials.lesson_01_foundations import build_chain, build_graph
 from agentic_ai_tutorials.lesson_02_tools_agent import lookup_product_price
+from agentic_ai_tutorials.models import load_chat_models, run_with_fallback
 from agentic_ai_tutorials.lesson_03_routing import build_graph as build_routing_graph
 from agentic_ai_tutorials.lesson_04_bounded_loop import (
     MAX_ATTEMPTS,
@@ -24,6 +30,64 @@ def test_lesson_01_chain_and_graph_run_offline():
 
 def test_lesson_02_local_tool():
     assert lookup_product_price.invoke({"product": "keyboard"}) == "keyboard: $89.50"
+
+
+def test_provider_selection_prefers_openai_and_configures_groq_fallback(monkeypatch):
+    monkeypatch.setattr("agentic_ai_tutorials.models.load_dotenv", lambda: None)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("OPENAI_MODEL", "test-openai-model")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.com/v1")
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setenv("GROQ_MODEL", "test-groq-model")
+
+    models = load_chat_models()
+
+    assert models.primary_name == "OpenAI"
+    assert isinstance(models.primary, ChatOpenAI)
+    assert models.fallback_name == "Groq"
+    assert isinstance(models.fallback, ChatGroq)
+
+
+def test_provider_selection_uses_groq_when_openai_is_not_configured(monkeypatch):
+    monkeypatch.setattr("agentic_ai_tutorials.models.load_dotenv", lambda: None)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_MODEL", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_MODEL", raising=False)
+    monkeypatch.setenv("GROQ_API_KEY", "test-groq-key")
+    monkeypatch.setenv("GROQ_MODEL", "test-groq-model")
+
+    models = load_chat_models()
+
+    assert models.primary_name == "Groq"
+    assert isinstance(models.primary, ChatGroq)
+    assert models.fallback is None
+
+
+def test_provider_request_retries_with_fallback(capsys):
+    def primary():
+        raise ModelRateLimitError("quota exceeded")
+
+    result = run_with_fallback(
+        primary,
+        lambda: "Groq response",
+        "OpenAI",
+        "Groq",
+    )
+
+    assert result == "Groq response"
+    assert "retrying with Groq" in capsys.readouterr().err
+
+
+def test_provider_request_reports_failure_when_both_providers_fail():
+    def primary():
+        raise ModelRateLimitError("quota exceeded")
+
+    def fallback():
+        raise ModelRateLimitError("quota exceeded")
+
+    with pytest.raises(RuntimeError, match="OpenAI request failed.*Groq fallback failed"):
+        run_with_fallback(primary, fallback, "OpenAI", "Groq")
 
 
 def test_lesson_03_routes_technical_and_general_messages():

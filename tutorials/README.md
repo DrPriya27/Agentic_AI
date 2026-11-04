@@ -107,5 +107,8 @@ requests a revision.
 
 After these examples, extend the same graphs with streaming, structured model
 outputs, retrieval, tracing/evaluation, and a durable store for data shared
-across threads. Keep provider credentials in ignored local environment files;
-never paste live credentials into source code or tutorial fixtures.
+across threads. Live model examples prefer OpenAI and fall back to Groq when
+both providers are configured; configure `OPENAI_API_KEY` and `OPENAI_MODEL`,
+and optionally `GROQ_API_KEY` and `GROQ_MODEL`, in `.env`. Keep provider
+credentials in ignored local environment files; never paste live credentials
+into source code or tutorial fixtures.

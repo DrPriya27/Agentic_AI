@@ -14,15 +14,17 @@ uv sync
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-The `.env` file is optional for offline lessons. It is only needed for live
-model-backed examples. Replace the sample values with credentials from a
-provider you trust; never commit `.env`. Python 3.13 is pinned for the
-environment because it has broad Windows wheel support.
+The `.env` file is optional for offline lessons. Live examples try OpenAI first
+when `OPENAI_API_KEY` and `OPENAI_MODEL` are configured; if that request fails,
+they retry with Groq when `GROQ_API_KEY` and `GROQ_MODEL` are configured. If
+only Groq is configured, it is used directly. Never commit `.env` or share
+provider keys. Python 3.13 is pinned for broad Windows wheel support.
 
 ## Run a lesson
 
 ```powershell
 uv run python src/agentic_ai_tutorials/lesson_01_foundations.py
+uv run python src/agentic_ai_tutorials/lesson_01_foundations.py --live
 uv run python src/agentic_ai_tutorials/lesson_02_tools_agent.py
 uv run python src/agentic_ai_tutorials/lesson_02_tools_agent.py --live
 uv run python src/agentic_ai_tutorials/lesson_03_routing.py
@@ -32,8 +34,8 @@ uv run python src/agentic_ai_tutorials/lesson_06_human_approval.py
 uv run python src/agentic_ai_tutorials/lesson_07_supervisor.py
 ```
 
-The live agent may incur provider charges and can send its prompt to that
-provider. The default Lesson 2 run only demonstrates the local tool.
+Live model requests can incur provider charges and send prompts to the
+configured provider. The default Lesson 2 run only demonstrates the local tool.
 
 ## Tutorial path
 
